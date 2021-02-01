@@ -1,3 +1,7 @@
+"""
+Autorzy: Michał Degowski i Maciej Milewski
+"""
+
 import requests
 from requests.auth import HTTPBasicAuth
 from pprint import pprint
