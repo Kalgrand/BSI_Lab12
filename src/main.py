@@ -1,6 +1,10 @@
 """
+Penetration test for web application.
+
+
 Autorzy: Michał Degowski i Maciej Milewski
 """
+
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -8,72 +12,85 @@ from pprint import pprint
 from bs4 import BeautifulSoup as bs
 from urllib.parse import urljoin
 
-verbs = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'TRACE', 'TEST']
-for verb in verbs:
-    req = requests.request(verb, 'http://127.0.0.1:65412/')
-    print(verb, req.status_code, req.reason)
-    if verb == 'TRACE' and 'TRACE / HTTP/1.1' in req.text:
-        print('Possible Cross Site Tracing vulnerability found')
 
-req = requests.get('http://127.0.0.1:65412/')
-headers = ['Server', 'Date', 'Via', 'X-Powered-By', 'X-Country-Code']
+def check_methods():
+    ''' Checks HTTP methods looking for potential vulnerabilities '''
+    verbs = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'TRACE', 'TEST']
+    for verb in verbs:
+        req = requests.request(verb, 'http://127.0.0.1:65412/')
+        print(verb, req.status_code, req.reason)
+        if verb == 'TRACE' and 'TRACE / HTTP/1.1' in req.text:
+            print('Possible Cross Site Tracing vulnerability found')
 
-for header in headers:
-    try:
-        result = req.headers[header]
-        print('%s: %s' % (header, result))
-    except Exception as error:
-        print('%s: Not found' % header)
 
-with open('passwords.txt') as passwords:
-    for password in passwords.readlines():
-        password = password.strip()
-        req = requests.get('http://127.0.0.1:65412/',
-                           auth=HTTPBasicAuth('admin', password))
-        if req.status_code == 401:
-            print(password, 'failed.')
-        elif req.status_code == 200:
-            print('Login successful, password:', password)
-            break
-        else:
-            print('Error occurred with', password)
-            break
+def check_headers():
+    ''' Checks HTTP headers looking for potential vulnerabilities '''
+    req = requests.get('http://127.0.0.1:65412/')
+    headers = ['Server', 'Date', 'Via', 'X-Powered-By', 'X-Country-Code']
 
-urls = open("urls.txt", "r")
-for url in urls:
-    url = url.strip()
-    req = requests.get(url)
-    print(url, 'report:')
-    try:
-        xssprotect = req.headers['X-XSS-Protection']
-        if xssprotect != '1; mode=block':
-            print('X-XSS-Protection not set properly, XSS may be possible:', xssprotect)
-    except:
-        print('X-XSS-Protection not set, XSS may be possible')
-    try:
-        contenttype = req.headers['X-Content-Type-Options']
-        if contenttype != 'nosniff':
-            print('X-Content-Type-Options not set properly:', contenttype)
-    except:
-        print('X-Content-Type-Options not set')
-    try:
-        hsts = req.headers['Strict-Transport-Security']
-    except:
-        print('HSTS header not set, MITM attacks may be possible')
-    try:
-        csp = req.headers['Content-Security-Policy']
-        print('Content-Security-Policy set:', csp)
-    except:
-        print('Content-Security-Policy missing')
-print('----')
+    for header in headers:
+        try:
+            result = req.headers[header]
+            print('%s: %s' % (header, result))
+        except Exception as error:
+            print('%s: Not found' % header)
+
+
+def login_attempt():
+    ''' Try to login using data from passwords.txt file '''
+    with open('passwords.txt') as passwords:
+        for password in passwords.readlines():
+            password = password.strip()
+            req = requests.get('http://127.0.0.1:65412/',
+                            auth=HTTPBasicAuth('admin', password))
+            if req.status_code == 401:
+                print(password, 'failed.')
+            elif req.status_code == 200:
+                print('Login successful, password:', password)
+                break
+            else:
+                print('Error occurred with', password)
+                break
+
+
+def xss_protection_check():
+    ''' Checks for XSS protection in HTTP request headers '''
+    urls = open("urls.txt", "r")
+    for url in urls:
+        url = url.strip()
+        req = requests.get(url)
+        print(url, 'report:')
+        try:
+            xssprotect = req.headers['X-XSS-Protection']
+            if xssprotect != '1; mode=block':
+                print('X-XSS-Protection not set properly, XSS may be possible:', xssprotect)
+        except:
+            print('X-XSS-Protection not set, XSS may be possible')
+        try:
+            contenttype = req.headers['X-Content-Type-Options']
+            if contenttype != 'nosniff':
+                print('X-Content-Type-Options not set properly:', contenttype)
+        except:
+            print('X-Content-Type-Options not set')
+        try:
+            hsts = req.headers['Strict-Transport-Security']
+        except:
+            print('HSTS header not set, MITM attacks may be possible')
+        try:
+            csp = req.headers['Content-Security-Policy']
+            print('Content-Security-Policy set:', csp)
+        except:
+            print('Content-Security-Policy missing')
+    print('----')
+
 
 def get_all_forms(url):
-
+    ''' Load all forms from given URL '''
     soup = bs(requests.get(url).content, "html.parser")
     return soup.find_all("form")
 
-def get_form_details(form):
 
+def get_form_details(form):
     details = {}
     # get the form action (target url)
     action = form.attrs.get("action").lower()
@@ -91,8 +108,8 @@ def get_form_details(form):
     details["inputs"] = inputs
     return details
 
-def submit_form(form_details, url, value):
 
+def submit_form(form_details, url, value):
     # construct the full URL (if the url provided in action is relative)
     target_url = urljoin(url, form_details["action"])
     # get the inputs
@@ -115,8 +132,8 @@ def submit_form(form_details, url, value):
         # GET request
         return requests.get(target_url, params=data)
 
-def scan_xss(url):
 
+def scan_xss(url):
     # get all the forms from the URL
     forms = get_all_forms(url)
     print(f"[+] Detected {len(forms)} forms on {url}.")
@@ -135,6 +152,13 @@ def scan_xss(url):
             # won't break because we want to print other available vulnerable forms
     return is_vulnerable
 
+
 if __name__ == "__main__":
     url = "http://127.0.0.1:65412/"
+
+    check_headers()
+    check_methods()
+    login_attempt()
+    xss_protection_check()
+
     print(scan_xss(url))
